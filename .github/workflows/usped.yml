@@ -97,7 +97,7 @@ jobs:
 
     env:
       REPO: cinenationbo/usa
-
+      MOVIE_ID: "244813"
     steps:
       # ✅ Setup Python
       - name: Setup Python
@@ -122,6 +122,8 @@ jobs:
         run: |
           cd usa
           pip install -r requirements.txt
+
+      
 
       # 📊 Run combiner
       - name: Run combiner
