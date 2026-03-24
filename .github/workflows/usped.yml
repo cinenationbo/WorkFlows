@@ -1,0 +1,127 @@
+name: peddi
+
+on:
+  schedule:
+    - cron: "3 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: peddi-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        shard: [0]
+
+    env:
+      MOVIE_ID: "244813"
+      RELEASE_DATE: "2026-04-29"
+      REPO: cinenationbo/usa
+
+    steps:
+      # ❌ removed checkout (public repo not needed)
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      # 🔥 Clone PRIVATE repo
+      - name: Clone Private Repo
+        run: |
+          git clone --depth=1 https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+
+      - name: Install dependencies
+        run: |
+          cd usa
+          pip install -r requirements.txt
+
+      - name: Compute TARGET_DATE
+        run: |
+          TODAY=$(date -u +"%Y-%m-%d")
+
+          BASE_DATE=$TODAY
+          if [[ "$TODAY" < "$RELEASE_DATE" ]]; then
+            BASE_DATE=$RELEASE_DATE
+          fi
+
+          TARGET_DATE=$(date -u -d "$BASE_DATE +${{ matrix.shard }} day" +"%Y-%m-%d")
+
+          echo "TARGET_DATE=$TARGET_DATE" >> $GITHUB_ENV
+          echo "📅 TARGET_DATE=$TARGET_DATE"
+
+      - name: Run scraper
+        run: |
+          cd usa
+          echo "🎬 MOVIE_ID=$MOVIE_ID"
+          python usa.py
+
+      # 🔥 Push back to PRIVATE repo
+      - name: Commit & Push
+        run: |
+          cd usa
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [[ -n $(git status --porcelain data/) ]]; then
+            git add data/
+            git commit -m "[skip ci] shard ${{ matrix.shard }} $TARGET_DATE ($(date -u +'%H:%M:%S'))"
+
+            git pull --rebase origin main
+            git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+            echo "✅ Changes pushed to PRIVATE repo"
+          else
+            echo "🟡 No changes"
+          fi
+
+  combine:
+    needs: scrape
+    runs-on: ubuntu-latest
+
+    env:
+      REPO: cinenationbo/usa
+
+    steps:
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      # 🔥 Clone PRIVATE repo again (fresh state)
+      - name: Clone Private Repo
+        run: |
+          git clone --depth=1 https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+
+      - name: Install dependencies
+        run: |
+          cd usa
+          pip install -r requirements.txt
+
+      - name: Run combiner
+        run: |
+          cd usa
+          echo "📊 Combining data..."
+          python combiner.py
+
+      - name: Commit & Push Combined
+        run: |
+          cd usa
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [[ -n $(git status --porcelain data/) ]]; then
+            git add data/
+            git commit -m "combined $(date -u +'%Y-%m-%d %H:%M:%S')"
+
+            git pull --rebase origin main
+            git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+            echo "✅ Combined pushed"
+          else
+            echo "🟡 No changes"
+          fi
