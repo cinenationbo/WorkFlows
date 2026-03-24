@@ -5,6 +5,7 @@ on:
     - cron: "3 * * * *"
   workflow_dispatch:
 
+# 🔥 prevent overlapping runs
 concurrency:
   group: peddi-${{ github.ref }}
   cancel-in-progress: true
@@ -23,24 +24,32 @@ jobs:
       REPO: cinenationbo/usa
 
     steps:
-      # ❌ removed checkout (public repo not needed)
-
+      # ✅ Setup Python (no cache yet)
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: "pip"
 
       # 🔥 Clone PRIVATE repo
       - name: Clone Private Repo
         run: |
           git clone --depth=1 https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
 
+      # ⚡ Enable pip cache AFTER clone
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('usa/requirements.txt') }}
+
+      # ⚡ Install dependencies
       - name: Install dependencies
         run: |
           cd usa
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # 📅 Compute TARGET_DATE
       - name: Compute TARGET_DATE
         run: |
           TODAY=$(date -u +"%Y-%m-%d")
@@ -55,13 +64,15 @@ jobs:
           echo "TARGET_DATE=$TARGET_DATE" >> $GITHUB_ENV
           echo "📅 TARGET_DATE=$TARGET_DATE"
 
+      # 🎬 Run scraper
       - name: Run scraper
         run: |
           cd usa
           echo "🎬 MOVIE_ID=$MOVIE_ID"
+          echo "📅 TARGET_DATE=$TARGET_DATE"
           python usa.py
 
-      # 🔥 Push back to PRIVATE repo
+      # 🚀 Commit & Push back to PRIVATE repo
       - name: Commit & Push
         run: |
           cd usa
@@ -74,7 +85,8 @@ jobs:
 
             git pull --rebase origin main
             git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
-            echo "✅ Changes pushed to PRIVATE repo"
+
+            echo "✅ Changes pushed"
           else
             echo "🟡 No changes"
           fi
@@ -87,28 +99,38 @@ jobs:
       REPO: cinenationbo/usa
 
     steps:
+      # ✅ Setup Python
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: "pip"
 
-      # 🔥 Clone PRIVATE repo again (fresh state)
+      # 🔥 Clone PRIVATE repo again (fresh latest)
       - name: Clone Private Repo
         run: |
           git clone --depth=1 https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
 
+      # ⚡ Cache pip
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('usa/requirements.txt') }}
+
+      # ⚡ Install deps
       - name: Install dependencies
         run: |
           cd usa
           pip install -r requirements.txt
 
+      # 📊 Run combiner
       - name: Run combiner
         run: |
           cd usa
           echo "📊 Combining data..."
           python combiner.py
 
+      # 🚀 Commit combined output
       - name: Commit & Push Combined
         run: |
           cd usa
@@ -121,6 +143,7 @@ jobs:
 
             git pull --rebase origin main
             git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+
             echo "✅ Combined pushed"
           else
             echo "🟡 No changes"
