@@ -1,0 +1,43 @@
+name: Canada Scraper Schedule
+on:
+  schedule:
+    # Runs every 20 minutes
+    - cron: '20 * * * *'
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  run_scraper:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+      
+      - name: Install Playwright browsers
+        run: |
+          playwright install
+          playwright install-deps
+      
+      - name: Run canada.py scraper
+        env:
+          CINEPLEX_FILM_ID: '60740'
+          ATP: '15.0'
+          TAX_RATE: '0.13'
+        run: python canada.py
+      
+      - name: Commit and push results
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add -A
+          git commit -m "Scheduled scraper run - $(date)" || echo "No changes to commit"
+          git push
