@@ -1,4 +1,4 @@
-name: peddi
+name: raakaasaa
 
 on:
   schedule:
@@ -19,8 +19,8 @@ jobs:
         shard: [0]
 
     env:
-      MOVIE_ID: "244813"
-      RELEASE_DATE: "2026-04-29"
+      MOVIE_ID: "244770"
+      RELEASE_DATE: "2026-04-02"
       REPO: cinenationbo/usa
 
     steps:
@@ -97,7 +97,7 @@ jobs:
 
     env:
       REPO: cinenationbo/usa
-      MOVIE_ID: "244813"
+      MOVIE_ID: "244770"
     steps:
       # ✅ Setup Python
       - name: Setup Python
