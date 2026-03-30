@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scraper: [VillageCinemas, EventCinemas, Hoyts, imax, hoytnz, eventnz]
+        scraper: [VillageCinemas, EventCinemas, Hoyts, imax, hotynz , eventnz]
 
     env:
       REPO: cinenationbo/aus
