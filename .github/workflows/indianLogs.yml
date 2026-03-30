@@ -1,0 +1,67 @@
+name: Indian Logs Schedule
+
+on:
+  schedule:
+    - cron: "0 * * * *"   # every hour
+  workflow_dispatch:
+
+concurrency:
+  group: indian-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    env:
+      REPO: cinenationbo/IndianLogs
+
+    steps:
+      # 🐍 Setup Python 3.12
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 🔐 Clone PRIVATE repo
+      - name: Clone Private Repo
+        run: |
+          git clone --depth=1 https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+
+      # ⚡ Cache pip
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('IndianLogs/requirements.txt') }}
+
+      # 📦 Install dependencies
+      - name: Install dependencies
+        run: |
+          cd IndianLogs
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 🚀 Run scraper
+      - name: Run Code
+        run: |
+          cd IndianLogs
+          python update_today.py
+
+      # 📤 Commit ONLY data folder
+      - name: Commit & Push Data
+        run: |
+          cd IndianLogs
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add data/
+
+          if [[ -n $(git status --porcelain data/) ]]; then
+            git commit -m "data update $(date -u +'%Y-%m-%d %H:%M:%S')"
+            git pull --rebase --autostash origin main
+            git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+            echo "✅ Data updated"
+          else
+            echo "🟡 No changes in data/"
+          fi
