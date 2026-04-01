@@ -2,7 +2,7 @@ name: raakaasaa
 
 on:
   schedule:
-    - cron: cron: "30 3,15 * * *"
+    - cron: "30 * * * *"
   workflow_dispatch:
 
 # 🔥 prevent overlapping runs
