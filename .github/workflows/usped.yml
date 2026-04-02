@@ -1,152 +1,173 @@
 name: raakaasaa
 
 on:
-  schedule:
-    - cron: "3 * * * *"
-  workflow_dispatch:
+schedule:
+- cron: "3 * * * *"
+workflow_dispatch:
 
 # 🔥 prevent overlapping runs
+
 concurrency:
-  group: peddi-${{ github.ref }}
-  cancel-in-progress: true
+group: raka-${{ github.ref }}
+cancel-in-progress: true
 
 jobs:
-  scrape:
-    runs-on: ubuntu-latest
+scrape:
+runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        shard: [0,1]
+strategy:
+  matrix:
+    shard: [0,1]
 
-    env:
-      MOVIE_ID: "244770"
-      RELEASE_DATE: "2026-04-02"
-      REPO: cinenationbo/usa
+env:
+  MOVIE_ID: "244770"
+  RELEASE_DATE: "2026-04-02"
+  REPO: cinenationbo/usa
 
-    steps:
-      # ✅ Setup Python (no cache yet)
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+steps:
+  # ✅ Setup Python
+  - name: Setup Python
+    uses: actions/setup-python@v5
+    with:
+      python-version: "3.12"
 
-      # 🔥 Clone PRIVATE repo
-      - name: Clone Private Repo
-        run: |
-          git clone --depth=1 https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+  # 🔥 Clone PRIVATE repo
+  - name: Clone Private Repo
+    run: |
+      git clone --depth=1 https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
 
-      # ⚡ Enable pip cache AFTER clone
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('usa/requirements.txt') }}
+  # ⚡ Cache pip
+  - name: Cache pip
+    uses: actions/cache@v4
+    with:
+      path: ~/.cache/pip
+      key: ${{ runner.os }}-pip-${{ hashFiles('usa/requirements.txt') }}
 
-      # ⚡ Install dependencies
-      - name: Install dependencies
-        run: |
-          cd usa
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+  # ⚡ Install dependencies
+  - name: Install dependencies
+    run: |
+      cd usa
+      python -m pip install --upgrade pip
+      pip install -r requirements.txt
 
-      # 📅 Compute TARGET_DATE
-      - name: Compute TARGET_DATE
-        run: |
-          TODAY=$(date -u +"%Y-%m-%d")
+  # 📅 Compute TARGET_DATE
+  - name: Compute TARGET_DATE
+    run: |
+      TODAY=$(date -u +"%Y-%m-%d")
 
-          BASE_DATE=$TODAY
-          if [[ "$TODAY" < "$RELEASE_DATE" ]]; then
-            BASE_DATE=$RELEASE_DATE
-          fi
+      BASE_DATE=$TODAY
+      if [[ "$TODAY" < "$RELEASE_DATE" ]]; then
+        BASE_DATE=$RELEASE_DATE
+      fi
 
-          TARGET_DATE=$(date -u -d "$BASE_DATE +${{ matrix.shard }} day" +"%Y-%m-%d")
+      TARGET_DATE=$(date -u -d "$BASE_DATE +${{ matrix.shard }} day" +"%Y-%m-%d")
 
-          echo "TARGET_DATE=$TARGET_DATE" >> $GITHUB_ENV
-          echo "📅 TARGET_DATE=$TARGET_DATE"
+      echo "TARGET_DATE=$TARGET_DATE" >> $GITHUB_ENV
+      echo "📅 TARGET_DATE=$TARGET_DATE"
 
-      # 🎬 Run scraper
-      - name: Run scraper
-        run: |
-          cd usa
-          echo "🎬 MOVIE_ID=$MOVIE_ID"
-          echo "📅 TARGET_DATE=$TARGET_DATE"
-          python usa.py
+  # 🎬 Run scraper
+  - name: Run scraper
+    run: |
+      cd usa
+      echo "🎬 MOVIE_ID=$MOVIE_ID"
+      echo "📅 TARGET_DATE=$TARGET_DATE"
+      python usa.py
 
-      # 🚀 Commit & Push back to PRIVATE repo
-      - name: Commit & Push
-        run: |
-          cd usa
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+  # 🚀 Commit & Push with retry + jitter
+  - name: Commit & Push
+    run: |
+      cd usa
+      git config user.name "github-actions[bot]"
+      git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if [[ -n $(git status --porcelain data/) ]]; then
-            git add data/
-            git commit -m "[skip ci] shard ${{ matrix.shard }} $TARGET_DATE ($(date -u +'%H:%M:%S'))"
+      if [[ -n $(git status --porcelain data/) ]]; then
+        git add data/
+        git commit -m "[skip ci] shard ${{ matrix.shard }} $TARGET_DATE ($(date -u +'%H:%M:%S'))"
 
-            git pull --rebase origin main
-            git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+        # 🔀 shard-based delay to avoid collision
+        sleep $(( ${{ matrix.shard }} * 5 ))
 
-            echo "✅ Changes pushed"
-          else
-            echo "🟡 No changes"
-          fi
+        # 🔁 Retry loop (max 5 attempts)
+        for i in {1..5}; do
+          echo "🔁 Push attempt $i..."
 
-  combine:
-    needs: scrape
-    runs-on: ubuntu-latest
+          git pull --rebase origin main && \
+          git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git && break
 
-    env:
-      REPO: cinenationbo/usa
-      MOVIE_ID: "244770"
-    steps:
-      # ✅ Setup Python
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+          echo "⚠️ Push failed, retrying in $((i*5))s..."
+          sleep $((i*5))
+        done
 
-      # 🔥 Clone PRIVATE repo again (fresh latest)
-      - name: Clone Private Repo
-        run: |
-          git clone --depth=1 https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+        echo "✅ Push process completed"
+      else
+        echo "🟡 No changes"
+      fi
+```
 
-      # ⚡ Cache pip
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('usa/requirements.txt') }}
+combine:
+needs: scrape
+runs-on: ubuntu-latest
 
-      # ⚡ Install deps
-      - name: Install dependencies
-        run: |
-          cd usa
-          pip install -r requirements.txt
+```
+env:
+  REPO: cinenationbo/usa
+  MOVIE_ID: "244770"
 
-      
+steps:
+  # ✅ Setup Python
+  - name: Setup Python
+    uses: actions/setup-python@v5
+    with:
+      python-version: "3.12"
 
-      # 📊 Run combiner
-      - name: Run combiner
-        run: |
-          cd usa
-          echo "📊 Combining data..."
-          python combiner.py
+  # 🔥 Clone PRIVATE repo
+  - name: Clone Private Repo
+    run: |
+      git clone --depth=1 https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
 
-      # 🚀 Commit combined output
-      - name: Commit & Push Combined
-        run: |
-          cd usa
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+  # ⚡ Cache pip
+  - name: Cache pip
+    uses: actions/cache@v4
+    with:
+      path: ~/.cache/pip
+      key: ${{ runner.os }}-pip-${{ hashFiles('usa/requirements.txt') }}
 
-          if [[ -n $(git status --porcelain data/) ]]; then
-            git add data/
-            git commit -m "combined $(date -u +'%Y-%m-%d %H:%M:%S')"
+  # ⚡ Install deps
+  - name: Install dependencies
+    run: |
+      cd usa
+      pip install -r requirements.txt
 
-            git pull --rebase origin main
-            git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+  # 📊 Run combiner
+  - name: Run combiner
+    run: |
+      cd usa
+      echo "📊 Combining data..."
+      python combiner.py
 
-            echo "✅ Combined pushed"
-          else
-            echo "🟡 No changes"
-          fi
+  # 🚀 Commit combined output with retry
+  - name: Commit & Push Combined
+    run: |
+      cd usa
+      git config user.name "github-actions[bot]"
+      git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      if [[ -n $(git status --porcelain data/) ]]; then
+        git add data/
+        git commit -m "combined $(date -u +'%Y-%m-%d %H:%M:%S')"
+
+        # 🔁 Retry loop
+        for i in {1..5}; do
+          echo "🔁 Combine push attempt $i..."
+
+          git pull --rebase origin main && \
+          git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git && break
+
+          echo "⚠️ Retry in $((i*5))s..."
+          sleep $((i*5))
+        done
+
+        echo "✅ Combined push done"
+      else
+        echo "🟡 No changes"
+      fi 
