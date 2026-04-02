@@ -2,7 +2,7 @@ name: raakaasaa
 
 on:
   schedule:
-    - cron: "40 * * * *"
+    - cron: "3 * * * *"
   workflow_dispatch:
 
 # 🔥 prevent overlapping runs
@@ -16,7 +16,7 @@ jobs:
 
     strategy:
       matrix:
-        shard: [0]
+        shard: [0,1]
 
     env:
       MOVIE_ID: "244770"
