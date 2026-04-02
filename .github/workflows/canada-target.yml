@@ -38,4 +38,11 @@ jobs:
           git config --local user.name "GitHub Action"
           git add -A
           git commit -m "Manual scraper run - $(date)" || echo "No changes to commit"
-          git push
+          # retry loop
+          for i in {1..5}; do
+            echo "🔁 Push attempt $i..."
+            git pull --rebase origin main && \
+            git push && break
+            echo "⚠️ Retry in $((i*5))s..."
+            sleep $((i*5))
+          done

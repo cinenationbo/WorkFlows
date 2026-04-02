@@ -83,8 +83,14 @@ jobs:
             git add data/
             git commit -m "[skip ci] shard ${{ matrix.shard }} $TARGET_DATE ($(date -u +'%H:%M:%S'))"
 
-            git pull --rebase origin main
-            git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+            # retry loop
+            for i in {1..5}; do
+              echo "🔁 Push attempt $i..."
+              git pull --rebase origin main && \
+              git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git && break
+              echo "⚠️ Retry in $((i*5))s..."
+              sleep $((i*5))
+            done
 
             echo "✅ Changes pushed"
           else
@@ -143,8 +149,14 @@ jobs:
             git add data/
             git commit -m "combined $(date -u +'%Y-%m-%d %H:%M:%S')"
 
-            git pull --rebase origin main
-            git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+            # retry loop
+            for i in {1..5}; do
+              echo "🔁 Push attempt $i..."
+              git pull --rebase origin main && \
+              git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git && break
+              echo "⚠️ Retry in $((i*5))s..."
+              sleep $((i*5))
+            done
 
             echo "✅ Combined pushed"
           else

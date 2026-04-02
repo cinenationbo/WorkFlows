@@ -59,8 +59,14 @@ jobs:
 
           if [[ -n $(git status --porcelain data/) ]]; then
             git commit -m "data update $(date -u +'%Y-%m-%d %H:%M:%S')"
-            git pull --rebase --autostash origin main
-            git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+            # retry loop
+            for i in {1..5}; do
+              echo "🔁 Push attempt $i..."
+              git pull --rebase --autostash origin main && \
+              git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git && break
+              echo "⚠️ Retry in $((i*5))s..."
+              sleep $((i*5))
+            done
             echo "✅ Data updated"
           else
             echo "🟡 No changes in data/"

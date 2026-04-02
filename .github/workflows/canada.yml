@@ -95,10 +95,14 @@ jobs:
           if [[ -n $(git status --porcelain) ]]; then
             git commit -m "canada update $DATE ($(date -u +'%H:%M:%S'))"
             
-            # 🔥 Handle parallel push conflicts
-            git pull --rebase origin main || true
-            
-            git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+            # retry loop
+            for i in {1..5}; do
+              echo "🔁 Push attempt $i..."
+              git pull --rebase origin main && \
+              git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git && break
+              echo "⚠️ Retry in $((i*5))s..."
+              sleep $((i*5))
+            done
             echo "✅ Changes pushed"
           else
             echo "🟡 No changes"
