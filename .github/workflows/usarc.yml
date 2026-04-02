@@ -1,0 +1,152 @@
+name: Race Gur USA
+
+on:
+  schedule:
+    - cron: "30 * * * *"
+  workflow_dispatch:
+
+# 🔥 prevent overlapping runs
+concurrency:
+  group: peddi-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        shard: [0,1]
+
+    env:
+      MOVIE_ID: "172652"
+      RELEASE_DATE: "2026-04-07"
+      REPO: cinenationbo/usa
+
+    steps:
+      # ✅ Setup Python (no cache yet)
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 🔥 Clone PRIVATE repo
+      - name: Clone Private Repo
+        run: |
+          git clone --depth=1 https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+
+      # ⚡ Enable pip cache AFTER clone
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('usa/requirements.txt') }}
+
+      # ⚡ Install dependencies
+      - name: Install dependencies
+        run: |
+          cd usa
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 📅 Compute TARGET_DATE
+      - name: Compute TARGET_DATE
+        run: |
+          TODAY=$(date -u +"%Y-%m-%d")
+
+          BASE_DATE=$TODAY
+          if [[ "$TODAY" < "$RELEASE_DATE" ]]; then
+            BASE_DATE=$RELEASE_DATE
+          fi
+
+          TARGET_DATE=$(date -u -d "$BASE_DATE +${{ matrix.shard }} day" +"%Y-%m-%d")
+
+          echo "TARGET_DATE=$TARGET_DATE" >> $GITHUB_ENV
+          echo "📅 TARGET_DATE=$TARGET_DATE"
+
+      # 🎬 Run scraper
+      - name: Run scraper
+        run: |
+          cd usa
+          echo "🎬 MOVIE_ID=$MOVIE_ID"
+          echo "📅 TARGET_DATE=$TARGET_DATE"
+          python usa.py
+
+      # 🚀 Commit & Push back to PRIVATE repo
+      - name: Commit & Push
+        run: |
+          cd usa
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [[ -n $(git status --porcelain data/) ]]; then
+            git add data/
+            git commit -m "[skip ci] shard ${{ matrix.shard }} $TARGET_DATE ($(date -u +'%H:%M:%S'))"
+
+            git pull --rebase origin main
+            git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+
+            echo "✅ Changes pushed"
+          else
+            echo "🟡 No changes"
+          fi
+
+  combine:
+    needs: scrape
+    runs-on: ubuntu-latest
+
+    env:
+      REPO: cinenationbo/usa
+      MOVIE_ID: "172652"
+    steps:
+      # ✅ Setup Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 🔥 Clone PRIVATE repo again (fresh latest)
+      - name: Clone Private Repo
+        run: |
+          git clone --depth=1 https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+
+      # ⚡ Cache pip
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('usa/requirements.txt') }}
+
+      # ⚡ Install deps
+      - name: Install dependencies
+        run: |
+          cd usa
+          pip install -r requirements.txt
+
+      
+
+      # 📊 Run combiner
+      - name: Run combiner
+        run: |
+          cd usa
+          echo "📊 Combining data..."
+          python combiner.py
+
+      # 🚀 Commit combined output
+      - name: Commit & Push Combined
+        run: |
+          cd usa
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [[ -n $(git status --porcelain data/) ]]; then
+            git add data/
+            git commit -m "combined $(date -u +'%Y-%m-%d %H:%M:%S')"
+
+            git pull --rebase origin main
+            git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+
+            echo "✅ Combined pushed"
+          else
+            echo "🟡 No changes"
+          fi
