@@ -7,7 +7,7 @@ on:
 
 # 🔥 prevent overlapping runs
 concurrency:
-  group: peddi-${{ github.ref }}
+  group: race-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
