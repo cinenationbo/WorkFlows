@@ -1,0 +1,156 @@
+name: raakaasaa
+
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch:
+
+# 🔥 prevent overlapping runs
+concurrency:
+  group: biker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        shard: [0, 1]
+
+    env:
+      MOVIE_ID: "245100"
+      RELEASE_DATE: "2026-04-02"
+      REPO: cinenationbo/usa
+
+    steps:
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Clone Private Repo
+        run: |
+          git clone --depth=1 https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('usa/requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          cd usa
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compute TARGET_DATE
+        run: |
+          TODAY=$(date -u +"%Y-%m-%d")
+
+          BASE_DATE=$TODAY
+          if [[ "$TODAY" < "$RELEASE_DATE" ]]; then
+            BASE_DATE=$RELEASE_DATE
+          fi
+
+          TARGET_DATE=$(date -u -d "$BASE_DATE +${{ matrix.shard }} day" +"%Y-%m-%d")
+
+          echo "TARGET_DATE=$TARGET_DATE" >> $GITHUB_ENV
+          echo "📅 TARGET_DATE=$TARGET_DATE"
+
+      - name: Run scraper
+        run: |
+          cd usa
+          echo "🎬 MOVIE_ID=$MOVIE_ID"
+          echo "📅 TARGET_DATE=$TARGET_DATE"
+          python usa.py
+
+      - name: Commit & Push
+        run: |
+          cd usa
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [[ -n $(git status --porcelain data/) ]]; then
+            git add data/
+            git commit -m "[skip ci] shard ${{ matrix.shard }} $TARGET_DATE ($(date -u +'%H:%M:%S'))"
+
+            # shard delay
+            sleep $(( ${{ matrix.shard }} * 5 ))
+
+            # retry loop
+            for i in {1..5}; do
+              echo "🔁 Push attempt $i..."
+
+              git pull --rebase origin main && \
+              git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git && break
+
+              echo "⚠️ Retry in $((i*5))s..."
+              sleep $((i*5))
+            done
+
+            echo "✅ Push done"
+          else
+            echo "🟡 No changes"
+          fi
+
+  combine:
+    needs: scrape
+    runs-on: ubuntu-latest
+
+    env:
+      REPO: cinenationbo/usa
+      MOVIE_ID: "245100"
+
+    steps:
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Clone Private Repo
+        run: |
+          git clone --depth=1 https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('usa/requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          cd usa
+          pip install -r requirements.txt
+
+      - name: Run combiner
+        run: |
+          cd usa
+          echo "📊 Combining data..."
+          python combiner.py
+
+      - name: Commit & Push Combined
+        run: |
+          cd usa
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [[ -n $(git status --porcelain data/) ]]; then
+            git add data/
+            git commit -m "combined $(date -u +'%Y-%m-%d %H:%M:%S')"
+
+            for i in {1..5}; do
+              echo "🔁 Combine push attempt $i..."
+
+              git pull --rebase origin main && \
+              git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git && break
+
+              echo "⚠️ Retry in $((i*5))s..."
+              sleep $((i*5))
+            done
+
+            echo "✅ Combined push done"
+          else
+            echo "🟡 No changes"
+          fi
