@@ -2,7 +2,7 @@ name: Race Gur USA
 
 on:
   schedule:
-    - cron: "30 * * * *"
+    - cron: "*/40 * * * *"
   workflow_dispatch:
 
 # 🔥 prevent overlapping runs
