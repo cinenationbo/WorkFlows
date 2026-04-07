@@ -2,13 +2,12 @@ name: Race Gur USA
 
 on:
   schedule:
-    - cron: "*/40 * * * *"
+    - cron: "5,35 * * * *"
   workflow_dispatch:
 
 # 🔥 prevent overlapping runs
 concurrency:
   group: race-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   scrape:
