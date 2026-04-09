@@ -2,7 +2,7 @@ name: Dacoit USA
 
 on:
   schedule:
-    - cron: "30 * * * *"
+    - cron: "3 * * * *"
   workflow_dispatch:
 
 # 🔥 prevent overlapping runs
