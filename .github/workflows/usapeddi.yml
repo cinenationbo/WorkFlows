@@ -1,4 +1,4 @@
-name: Dacoit USA
+name: Peddi USA
 
 on:
   schedule:
@@ -7,7 +7,7 @@ on:
 
 # 🔥 prevent overlapping runs
 concurrency:
-  group: dacoit-${{ github.ref }}
+  group: peddi-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -19,8 +19,8 @@ jobs:
         shard: [0,1]
 
     env:
-      MOVIE_ID: "243815"
-      RELEASE_DATE: "2026-04-09"
+      MOVIE_ID: "244813"
+      RELEASE_DATE: "2026-06-03"
       REPO: cinenationbo/usa
 
     steps:
@@ -103,7 +103,7 @@ jobs:
 
     env:
       REPO: cinenationbo/usa
-      MOVIE_ID: "243815"
+      MOVIE_ID: "244813"
     steps:
       # ✅ Setup Python
       - name: Setup Python
