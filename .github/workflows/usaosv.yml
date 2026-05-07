@@ -1,8 +1,6 @@
 name: Ooservalli USA
 
 on:
-  schedule:
-    - cron: "3 * * * *"
   workflow_dispatch:
 
 # 🔥 prevent overlapping runs
