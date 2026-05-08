@@ -1,48 +1,101 @@
-name: Run Canada Scraper with Target Date
+name: Canada Scraper Schedule
 
 on:
-  workflow_dispatch:  # Allow manual triggering
+  schedule:
+    - cron: "20 * * * *"
+  workflow_dispatch:
+
+# 🔥 Prevent overlapping runs
+concurrency:
+  group: canada-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  run_scraper_target:
+  scrape:
     runs-on: ubuntu-latest
-    
+
+    env:
+      REPO: cinenationbo/usa
+      CINEPLEX_FILM_ID: "60740"
+      ATP: "15.0"
+      TAX_RATE: "0.13"
+      TARGET_DATE: "2026-06-03"
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      # 🐍 Setup Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      
-      - name: Install dependencies
+          python-version: "3.12"
+
+      # 🔐 Clone PRIVATE repo
+      - name: Clone Private Repo
         run: |
+          git clone --depth=1 https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+
+      # ⚡ Cache pip
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('usa/requirements.txt') }}
+
+      # 📦 Install dependencies
+      - name: Install dependencies
+        working-directory: usa
+        run: |
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
-      
-      - name: Install Playwright browsers
+
+      # 🎭 Install Playwright
+      - name: Install Playwright
+        working-directory: usa
         run: |
           playwright install
           playwright install-deps
-      
-      - name: Run canada.py scraper
-        env:
-          CINEPLEX_FILM_ID: '60740'
-          ATP: '15.0'
-          TAX_RATE: '0.13'
-        run: python canada.py
-      
-      - name: Commit and push results
+
+      # 📅 Show Target Date
+      - name: Show TargetDate
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add -A
-          git commit -m "Manual scraper run - $(date)" || echo "No changes to commit"
-          # retry loop
-          for i in {1..5}; do
-            echo "🔁 Push attempt $i..."
-            git pull --rebase origin main && \
-            git push && break
-            echo "⚠️ Retry in $((i*5))s..."
-            sleep $((i*5))
+          echo "📅 TARGET_DATE=$TARGET_DATE"
+
+      # 🔁 Run scraper with retry
+      - name: Run canada.py
+        working-directory: usa
+        run: |
+          echo "🎬 FILM_ID=$CINEPLEX_FILM_ID"
+          echo "📅 TARGET_DATE=$TARGET_DATE"
+
+          for i in 1 2 3; do
+            echo "Attempt $i..."
+            python canada.py "$TARGET_DATE" && break || sleep 15
           done
+
+      # 📤 Commit & Push
+      - name: Commit & Push
+        working-directory: usa
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+
+          # ❌ Exclude USA data folder
+          git reset data/244813/ || true
+
+          if [[ -n $(git status --porcelain) ]]; then
+            git commit -m "canada update $TARGET_DATE ($(date -u +'%H:%M:%S'))"
+
+            for i in {1..5}; do
+              echo "🔁 Push attempt $i..."
+              git pull --rebase origin main && \
+              git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git && break
+
+              echo "⚠️ Retry in $((i*5))s..."
+              sleep $((i*5))
+            done
+
+            echo "✅ Changes pushed"
+          else
+            echo "🟡 No changes"
+          fi
