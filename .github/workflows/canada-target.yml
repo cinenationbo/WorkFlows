@@ -1,18 +1,16 @@
 name: Canada TARGET DATE
 
 on:
-  schedule:
-    - cron: "20 * * * *"
   workflow_dispatch:
 
-# 🔥 Prevent overlapping runs
 concurrency:
-  group: canada-${{ github.ref }}
+  group: canada-target-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     env:
       REPO: cinenationbo/usa
@@ -22,23 +20,22 @@ jobs:
       TARGET_DATE: "20260603"
 
     steps:
+      # 📥 Checkout repo directly
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.REPO }}
+          token: ${{ secrets.GH_PAT }}
+          path: usa
+          fetch-depth: 1
+
       # 🐍 Setup Python
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      # 🔐 Clone PRIVATE repo
-      - name: Clone Private Repo
-        run: |
-          git clone --depth=1 https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
-
-      # ⚡ Cache pip
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('usa/requirements.txt') }}
+          cache: "pip"
+          cache-dependency-path: usa/requirements.txt
 
       # 📦 Install dependencies
       - name: Install dependencies
@@ -47,29 +44,39 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 🎭 Install Playwright
+      # 🎭 Install Playwright + Linux deps
       - name: Install Playwright
         working-directory: usa
         run: |
-          playwright install
-          playwright install-deps
+          playwright install chromium
+          sudo apt-get update
+          sudo apt-get install -y xvfb
 
-      # 📅 Show Target Date
-      - name: Show TargetDate
-        run: |
-          echo "📅 TARGET_DATE=$TARGET_DATE"
-
-      # 🔁 Run scraper with retry
-      - name: Run canada.py
-        working-directory: usa
+      # 📅 Debug info
+      - name: Show Config
         run: |
           echo "🎬 FILM_ID=$CINEPLEX_FILM_ID"
           echo "📅 TARGET_DATE=$TARGET_DATE"
 
+      # 🚀 Run scraper with retries
+      - name: Run canada.py
+        working-directory: usa
+        run: |
+          success=0
+
           for i in 1 2 3; do
-            echo "Attempt $i..."
-            python canada.py "$TARGET_DATE" && break || sleep 15
+            echo "🔁 Attempt $i"
+
+            xvfb-run -a python canada.py "$TARGET_DATE" && success=1 && break
+
+            echo "⚠️ Failed attempt $i"
+            sleep 20
           done
+
+          if [ $success -ne 1 ]; then
+            echo "❌ Scraper failed after retries"
+            exit 1
+          fi
 
       # 📤 Commit & Push
       - name: Commit & Push
@@ -80,22 +87,21 @@ jobs:
 
           git add -A
 
-          # ❌ Exclude USA data folder
+          # exclude unwanted folder
           git reset data/244813/ || true
 
           if [[ -n $(git status --porcelain) ]]; then
-            git commit -m "canada update $TARGET_DATE ($(date -u +'%H:%M:%S'))"
+            git commit -m "canada update $TARGET_DATE ($(date -u +'%H:%M:%S UTC'))"
 
-            for i in {1..5}; do
-              echo "🔁 Push attempt $i..."
-              git pull --rebase origin main && \
-              git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git && break
+            for i in 1 2 3 4 5; do
+              echo "🚀 Push attempt $i"
 
-              echo "⚠️ Retry in $((i*5))s..."
-              sleep $((i*5))
+              git pull --rebase origin main && git push && break
+
+              sleep $((i * 10))
             done
 
             echo "✅ Changes pushed"
           else
-            echo "🟡 No changes"
+            echo "🟡 No changes detected"
           fi
