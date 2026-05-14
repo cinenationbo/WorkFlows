@@ -1,0 +1,109 @@
+name: Canada TARGET DATE
+
+on:
+ schedule:
+    - cron: "20 * * * *" 
+  workflow_dispatch:
+
+concurrency:
+  group: canada-target-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    env:
+      REPO: cinenationbo/usa
+      CINEPLEX_FILM_ID: "60740"
+      ATP: "15.0"
+      TAX_RATE: "0.13"
+      TARGET_DATE: "20260603"
+
+    steps:
+      # 📥 Checkout repo directly
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.REPO }}
+          token: ${{ secrets.GH_PAT }}
+          path: usa
+          fetch-depth: 1
+
+      # 🐍 Setup Python
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: usa/requirements.txt
+
+      # 📦 Install dependencies
+      - name: Install dependencies
+        working-directory: usa
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 🎭 Install Playwright + Linux deps
+      - name: Install Playwright
+        working-directory: usa
+        run: |
+          playwright install chromium
+          sudo apt-get update
+          sudo apt-get install -y xvfb
+
+      # 📅 Debug info
+      - name: Show Config
+        run: |
+          echo "🎬 FILM_ID=$CINEPLEX_FILM_ID"
+          echo "📅 TARGET_DATE=$TARGET_DATE"
+
+      # 🚀 Run scraper with retries
+      - name: Run canada.py
+        working-directory: usa
+        run: |
+          success=0
+
+          for i in 1 2 3; do
+            echo "🔁 Attempt $i"
+
+            xvfb-run -a python canada.py "$TARGET_DATE" && success=1 && break
+
+            echo "⚠️ Failed attempt $i"
+            sleep 20
+          done
+
+          if [ $success -ne 1 ]; then
+            echo "❌ Scraper failed after retries"
+            exit 1
+          fi
+
+      # 📤 Commit & Push
+      - name: Commit & Push
+        working-directory: usa
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+
+          # exclude unwanted folder
+          git reset data/244813/ || true
+
+          if [[ -n $(git status --porcelain) ]]; then
+            git commit -m "canada update $TARGET_DATE ($(date -u +'%H:%M:%S UTC'))"
+
+            for i in 1 2 3 4 5; do
+              echo "🚀 Push attempt $i"
+
+              git pull --rebase origin main && git push && break
+
+              sleep $((i * 10))
+            done
+
+            echo "✅ Changes pushed"
+          else
+            echo "🟡 No changes detected"
+          fi
