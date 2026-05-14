@@ -3,7 +3,7 @@ name: Canada TARGET DATE - 1
 on:
  schedule:
     - cron: "20 * * * *" 
-  workflow_dispatch:
+ workflow_dispatch:
 
 concurrency:
   group: canada-target-${{ github.ref }}
