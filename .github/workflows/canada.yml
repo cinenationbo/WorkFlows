@@ -19,6 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         day: [today, tomorrow]
+        shard: [1, 2, 3, 4]
 
     env:
       REPO: cinenationbo/usa
@@ -26,6 +27,7 @@ jobs:
       ATP: "15.0"
       TAX_RATE: "0.13"
       TZ: America/Toronto
+      TOTAL_SHARDS: 4
 
     steps:
       # 📥 Checkout private repo
@@ -35,7 +37,7 @@ jobs:
           repository: ${{ env.REPO }}
           token: ${{ secrets.GH_PAT }}
           path: usa
-          fetch-depth: 1
+          fetch-depth: 0
 
       # 🐍 Setup Python
       - name: Setup Python
@@ -75,19 +77,22 @@ jobs:
           echo "================================"
           echo "📅 DATE=$DATE"
           echo "🎬 FILM_ID=$CINEPLEX_FILM_ID"
+          echo "🧩 SHARD=${{ matrix.shard }}/$TOTAL_SHARDS"
           echo "================================"
 
       # 🚀 Run scraper with retry
       - name: Run canada.py
         working-directory: usa
         shell: bash
+        env:
+          SHARD_INDEX: ${{ matrix.shard }}
         run: |
           success=0
 
           for i in 1 2 3; do
             echo "🔁 Attempt $i"
 
-            xvfb-run -a python canada.py "$DATE"
+            xvfb-run -a python canada.py "$DATE" "$SHARD_INDEX" "$TOTAL_SHARDS"
 
             EXIT_CODE=$?
 
@@ -106,6 +111,18 @@ jobs:
             exit 1
           fi
 
+      # 🔄 Sync latest before commit
+      - name: Rebase Latest
+        working-directory: usa
+        shell: bash
+        run: |
+          git fetch origin main
+          git rebase origin/main || {
+            echo "⚠️ Rebase failed, aborting..."
+            git rebase --abort
+            exit 1
+          }
+
       # 📤 Commit & Push
       - name: Commit & Push
         working-directory: usa
@@ -121,20 +138,30 @@ jobs:
 
           if [[ -n $(git status --porcelain) ]]; then
 
-            git commit -m "canada update $DATE ($(date -u +'%H:%M:%S UTC'))"
+            git commit -m "canada shard-${{ matrix.shard }} update $DATE ($(date -u +'%H:%M:%S UTC'))"
 
             for i in 1 2 3 4 5; do
               echo "🚀 Push attempt $i"
 
-              git pull --rebase origin main
+              git fetch origin main
 
-              if git push; then
+              git rebase origin/main || {
+                echo "⚠️ Rebase conflict detected"
+
+                git rebase --abort || true
+
+                echo "🔄 Retrying after sleep..."
+                sleep $((i * 15))
+                continue
+              }
+
+              if git push origin HEAD:main; then
                 echo "✅ Push successful"
                 exit 0
               fi
 
               echo "⚠️ Push failed. Retrying..."
-              sleep $((i * 10))
+              sleep $((i * 15))
             done
 
             echo "❌ Push failed after retries"
