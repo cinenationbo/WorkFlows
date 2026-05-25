@@ -1,4 +1,4 @@
-name: Ooservalli USA
+name: Athidhi4K USA
 
 on:
   workflow_dispatch:
@@ -17,8 +17,8 @@ jobs:
         shard: [0,1]
 
     env:
-      MOVIE_ID: "148795"
-      RELEASE_DATE: "2026-05-19"
+      MOVIE_ID: "111677"
+      RELEASE_DATE: "2026-05-29"
       REPO: cinenationbo/usa
 
     steps:
