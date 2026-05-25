@@ -89,8 +89,8 @@ jobs:
         run: |
           success=0
 
-          for i in 1 2 3; do
-            echo "🔁 Attempt $i"
+          for i in {1..10}; do
+            echo "🔁 Scraper Attempt $i"
 
             xvfb-run -a python canada.py "$DATE" "$SHARD_INDEX" "$TOTAL_SHARDS"
 
@@ -102,12 +102,12 @@ jobs:
               break
             fi
 
-            echo "⚠️ Failed attempt $i"
-            sleep 20
+            echo "⚠️ Failed scraper attempt $i"
+            sleep $((i * 20))
           done
 
           if [ $success -ne 1 ]; then
-            echo "❌ All retries failed"
+            echo "❌ All scraper retries failed"
             exit 1
           fi
 
@@ -116,12 +116,25 @@ jobs:
         working-directory: usa
         shell: bash
         run: |
-          git fetch origin main
-          git rebase origin/main || {
-            echo "⚠️ Rebase failed, aborting..."
-            git rebase --abort
-            exit 1
-          }
+          for i in {1..10}; do
+            echo "🔄 Rebase Attempt $i"
+
+            git fetch origin main
+
+            if git rebase origin/main; then
+              echo "✅ Rebase successful"
+              exit 0
+            fi
+
+            echo "⚠️ Rebase failed"
+
+            git rebase --abort || true
+
+            sleep $((i * 15))
+          done
+
+          echo "❌ Rebase failed after retries"
+          exit 1
 
       # 📤 Commit & Push
       - name: Commit & Push
@@ -138,34 +151,46 @@ jobs:
 
           if [[ -n $(git status --porcelain) ]]; then
 
-            git commit -m "canada shard-${{ matrix.shard }} update $DATE ($(date -u +'%H:%M:%S UTC'))"
+            git commit -m "canada shard-${{ matrix.shard }} update $DATE ($(date -u +'%H:%M:%S UTC'))" || true
 
-            for i in 1 2 3 4 5; do
-              echo "🚀 Push attempt $i"
+            PUSH_SUCCESS=0
+
+            for i in {1..10}; do
+              echo "🚀 Push Attempt $i"
 
               git fetch origin main
 
-              git rebase origin/main || {
+              if ! git rebase origin/main; then
                 echo "⚠️ Rebase conflict detected"
 
                 git rebase --abort || true
 
-                echo "🔄 Retrying after sleep..."
-                sleep $((i * 15))
+                echo "⏳ Waiting before retry..."
+                sleep $((i * 20))
                 continue
-              }
+              fi
 
               if git push origin HEAD:main; then
                 echo "✅ Push successful"
-                exit 0
+                PUSH_SUCCESS=1
+                break
               fi
 
-              echo "⚠️ Push failed. Retrying..."
-              sleep $((i * 15))
+              echo "⚠️ Push failed"
+
+              git fetch origin main
+
+              git rebase origin/main || {
+                git rebase --abort || true
+              }
+
+              sleep $((i * 20))
             done
 
-            echo "❌ Push failed after retries"
-            exit 1
+            if [ $PUSH_SUCCESS -ne 1 ]; then
+              echo "❌ Push failed after all retries"
+              exit 1
+            fi
 
           else
             echo "🟡 No changes detected"
