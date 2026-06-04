@@ -47,24 +47,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           
-      # 📅 Compute TARGET_DATE (shifts to the next day after 12:00 PM PST)
+     # 📅 Compute TARGET_DATE (shifts to the next day at midnight PST)
       - name: Compute TARGET_DATE
         run: |
-          # Get current date and hour in America/Los_Angeles timezone
+          # Get current date in America/Los_Angeles timezone
           PST_DATE=$(TZ="America/Los_Angeles" date +"%Y-%m-%d")
-          PST_HOUR=$(TZ="America/Los_Angeles" date +"%H" | sed 's/^0//') # strip leading zero
-          
-          # Default hour to 0 if empty
-          if [ -z "$PST_HOUR" ]; then
-            PST_HOUR=0
-          fi
-          
           BASE_DATE=$PST_DATE
-          
-          # If PST time is 12:00 PM (noon) or later, shift base date to the next day
-          if [ "$PST_HOUR" -ge 12 ]; then
-            BASE_DATE=$(date -d "$PST_DATE + 1 day" +"%Y-%m-%d")
-          fi
           
           # Ensure base date is not before release date
           if [[ "$BASE_DATE" < "$RELEASE_DATE" ]]; then
