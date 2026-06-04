@@ -32,7 +32,7 @@ jobs:
       - name: Clone Private Repo
         run: |
           git clone --depth=1 https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
-
+      
       # ⚡ Enable pip cache AFTER clone
       - name: Cache pip
         uses: actions/cache@v4
@@ -46,22 +46,36 @@ jobs:
           cd usa
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
-      # 📅 Compute TARGET_DATE
+          
+      # 📅 Compute TARGET_DATE (shifts to the next day after 12:00 PM PST)
       - name: Compute TARGET_DATE
         run: |
-          TODAY=$(date -u +"%Y-%m-%d")
-
-          BASE_DATE=$TODAY
-          if [[ "$TODAY" < "$RELEASE_DATE" ]]; then
+          # Get current date and hour in America/Los_Angeles timezone
+          PST_DATE=$(TZ="America/Los_Angeles" date +"%Y-%m-%d")
+          PST_HOUR=$(TZ="America/Los_Angeles" date +"%H" | sed 's/^0//') # strip leading zero
+          
+          # Default hour to 0 if empty
+          if [ -z "$PST_HOUR" ]; then
+            PST_HOUR=0
+          fi
+          
+          BASE_DATE=$PST_DATE
+          
+          # If PST time is 12:00 PM (noon) or later, shift base date to the next day
+          if [ "$PST_HOUR" -ge 12 ]; then
+            BASE_DATE=$(date -d "$PST_DATE + 1 day" +"%Y-%m-%d")
+          fi
+          
+          # Ensure base date is not before release date
+          if [[ "$BASE_DATE" < "$RELEASE_DATE" ]]; then
             BASE_DATE=$RELEASE_DATE
           fi
-
-          TARGET_DATE=$(date -u -d "$BASE_DATE +${{ matrix.shard }} day" +"%Y-%m-%d")
-
+          
+          # Add shard offset (0 or 1 days)
+          TARGET_DATE=$(date -d "$BASE_DATE +${{ matrix.shard }} day" +"%Y-%m-%d")
           echo "TARGET_DATE=$TARGET_DATE" >> $GITHUB_ENV
           echo "📅 TARGET_DATE=$TARGET_DATE"
-
+          
       # 🎬 Run scraper
       - name: Run scraper
         run: |
@@ -69,18 +83,16 @@ jobs:
           echo "🎬 MOVIE_ID=$MOVIE_ID"
           echo "📅 TARGET_DATE=$TARGET_DATE"
           python usa.py
-
+          
       # 🚀 Commit & Push back to PRIVATE repo
       - name: Commit & Push
         run: |
           cd usa
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
           if [[ -n $(git status --porcelain data/) ]]; then
             git add data/
             git commit -m "[skip ci] shard ${{ matrix.shard }} $TARGET_DATE ($(date -u +'%H:%M:%S'))"
-
             # retry loop
             for i in {1..5}; do
               echo "🔁 Push attempt $i..."
@@ -89,12 +101,11 @@ jobs:
               echo "⚠️ Retry in $((i*5))s..."
               sleep $((i*5))
             done
-
             echo "✅ Changes pushed"
           else
             echo "🟡 No changes"
           fi
-
+          
   combine:
     needs: scrape
     runs-on: ubuntu-latest
@@ -113,7 +124,7 @@ jobs:
       - name: Clone Private Repo
         run: |
           git clone --depth=1 https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
-
+          
       # ⚡ Cache pip
       - name: Cache pip
         uses: actions/cache@v4
@@ -126,27 +137,23 @@ jobs:
         run: |
           cd usa
           pip install -r requirements.txt
-
       
-
       # 📊 Run combiner
       - name: Run combiner
         run: |
           cd usa
           echo "📊 Combining data..."
           python combiner.py
-
+          
       # 🚀 Commit combined output
       - name: Commit & Push Combined
         run: |
           cd usa
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
           if [[ -n $(git status --porcelain data/) ]]; then
             git add data/
             git commit -m "combined $(date -u +'%Y-%m-%d %H:%M:%S')"
-
             # retry loop
             for i in {1..5}; do
               echo "🔁 Push attempt $i..."
@@ -155,7 +162,6 @@ jobs:
               echo "⚠️ Retry in $((i*5))s..."
               sleep $((i*5))
             done
-
             echo "✅ Combined pushed"
           else
             echo "🟡 No changes"
