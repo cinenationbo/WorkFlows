@@ -17,7 +17,7 @@ jobs:
       CINEPLEX_FILM_ID: "60740"
       ATP: "15.0"
       TAX_RATE: "0.13"
-      TARGET_DATE: "20260603"
+      TARGET_DATE: "20260608"
 
     steps:
       # 📥 Checkout repo directly
