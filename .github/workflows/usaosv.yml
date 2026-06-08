@@ -1,4 +1,4 @@
-name: Athidhi4K USA
+name: The Odyssey (2026) USA
 
 on:
   workflow_dispatch:
@@ -14,11 +14,11 @@ jobs:
 
     strategy:
       matrix:
-        shard: [0,1]
+        shard: [0]
 
     env:
-      MOVIE_ID: "111677"
-      RELEASE_DATE: "2026-05-29"
+      MOVIE_ID: "241283"
+      RELEASE_DATE: "2026-06-16"
       REPO: cinenationbo/usa
 
     steps:
