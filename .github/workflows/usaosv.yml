@@ -101,7 +101,7 @@ jobs:
 
     env:
       REPO: cinenationbo/usa
-      MOVIE_ID: "148795"
+      MOVIE_ID: "241283"
     steps:
       # ✅ Setup Python
       - name: Setup Python
