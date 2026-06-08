@@ -18,7 +18,7 @@ jobs:
 
     env:
       MOVIE_ID: "241283"
-      RELEASE_DATE: "2026-06-16"
+      RELEASE_DATE: "2026-07-16"
       REPO: cinenationbo/usa
 
     steps:
