@@ -1,4 +1,4 @@
-name: Canada daily and Advance
+name: Canada Daily and advance
 
 on:
   schedule:
@@ -6,13 +6,18 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: canada-${{ github.ref }}
+  group: canada-target-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [today, tomorrow]
 
     env:
       REPO: cinenationbo/usa
@@ -54,46 +59,54 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y xvfb
 
-      # 📅 Show Canada dates
+      # 📅 Set Canada Target Date
+      - name: Set Target Date
+        run: |
+          if [ "${{ matrix.shard }}" = "today" ]; then
+            echo "TARGET_DATE=$(TZ=$TZ date +%Y%m%d)" >> $GITHUB_ENV
+          else
+            echo "TARGET_DATE=$(TZ=$TZ date -d '+1 day' +%Y%m%d)" >> $GITHUB_ENV
+          fi
+
+      # 📅 Debug
       - name: Show Config
         run: |
-          echo "🎬 FILM_ID=$CINEPLEX_FILM_ID"
-          echo "🇨🇦 Today: $(TZ=$TZ date +%Y%m%d)"
-          echo "🇨🇦 Tomorrow: $(TZ=$TZ date -d '+1 day' +%Y%m%d)"
+          echo "Shard      : ${{ matrix.shard }}"
+          echo "Film ID    : $CINEPLEX_FILM_ID"
+          echo "Target Date: $TARGET_DATE"
 
-      # 🚀 Run scraper for Today & Tomorrow (Canada Time)
+      # 🚀 Run scraper with retries
       - name: Run canada.py
         working-directory: usa
         run: |
-          dates=(
-            "$(TZ=$TZ date +%Y%m%d)"
-            "$(TZ=$TZ date -d '+1 day' +%Y%m%d)"
-          )
+          success=0
 
-          for TARGET_DATE in "${dates[@]}"; do
-            echo ""
-            echo "=================================="
-            echo "📅 Processing $TARGET_DATE"
-            echo "=================================="
+          for i in {1..3}; do
+            echo "===================================="
+            echo "Shard   : ${{ matrix.shard }}"
+            echo "Attempt : $i"
+            echo "Date    : $TARGET_DATE"
+            echo "===================================="
 
-            success=0
+            if xvfb-run -a python canada.py "$TARGET_DATE"; then
+              success=1
+              echo "✅ Success"
+              break
+            fi
 
-            for i in 1 2 3; do
-              echo "🔁 Attempt $i"
+            echo "⚠️ Attempt $i failed"
 
-              xvfb-run -a python canada.py "$TARGET_DATE" && success=1 && break
-
-              echo "⚠️ Failed attempt $i"
+            if [ "$i" -lt 3 ]; then
               sleep 20
-            done
-
-            if [ $success -ne 1 ]; then
-              echo "❌ Scraper failed for $TARGET_DATE"
-              exit 1
             fi
           done
 
-      # 📤 Commit & Push
+          if [ "$success" -ne 1 ]; then
+            echo "❌ Scraper failed after 3 attempts"
+            exit 1
+          fi
+
+      # 📤 Commit & Push with retries
       - name: Commit & Push
         working-directory: usa
         run: |
@@ -102,21 +115,34 @@ jobs:
 
           git add -A
 
-          # exclude unwanted folder
+          # Exclude unwanted folder
           git reset data/244813/ || true
 
           if [[ -n $(git status --porcelain) ]]; then
-            git commit -m "canada update $(TZ=$TZ date +'%Y-%m-%d %H:%M:%S %Z')"
+            git commit -m "canada ${{ matrix.shard }} $TARGET_DATE ($(TZ=$TZ date +'%H:%M:%S %Z'))"
 
-            for i in 1 2 3 4 5; do
+            pushed=0
+
+            for i in {1..5}; do
               echo "🚀 Push attempt $i"
 
-              git pull --rebase origin main && git push && break
+              if git pull --rebase origin main && git push; then
+                pushed=1
+                echo "✅ Push successful"
+                break
+              fi
 
-              sleep $((i * 10))
+              echo "⚠️ Push failed"
+
+              if [ "$i" -lt 5 ]; then
+                sleep $((i * 10))
+              fi
             done
 
-            echo "✅ Changes pushed"
+            if [ "$pushed" -ne 1 ]; then
+              echo "❌ Failed to push after 5 attempts"
+              exit 1
+            fi
           else
             echo "🟡 No changes detected"
           fi
