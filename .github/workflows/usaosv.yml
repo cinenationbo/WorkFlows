@@ -17,8 +17,8 @@ jobs:
         shard: [0]
 
     env:
-      MOVIE_ID: "241283"
-      RELEASE_DATE: "2026-07-16"
+      MOVIE_ID: "244827"
+      RELEASE_DATE: "2026-06-18"
       REPO: cinenationbo/usa
 
     steps:
@@ -101,7 +101,7 @@ jobs:
 
     env:
       REPO: cinenationbo/usa
-      MOVIE_ID: "241283"
+      MOVIE_ID: "244827"
     steps:
       # ✅ Setup Python
       - name: Setup Python
