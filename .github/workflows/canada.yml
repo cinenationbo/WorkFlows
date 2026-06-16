@@ -1,13 +1,12 @@
-name: Canada Scraper Schedule
+name: Canada daily and Advance
 
 on:
   schedule:
     - cron: "20 * * * *"
   workflow_dispatch:
 
-# 🔥 Prevent overlapping runs
 concurrency:
-  group: canada-${{ github.ref }}
+  group: canada-target-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -15,29 +14,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
 
-    strategy:
-      fail-fast: false
-      matrix:
-        day: [today, tomorrow]
-        shard: [1, 2, 3, 4]
-
     env:
       REPO: cinenationbo/usa
       CINEPLEX_FILM_ID: "60740"
       ATP: "15.0"
       TAX_RATE: "0.13"
       TZ: America/Toronto
-      TOTAL_SHARDS: 4
 
     steps:
-      # 📥 Checkout private repo
+      # 📥 Checkout repo
       - name: Checkout Repo
         uses: actions/checkout@v4
         with:
           repository: ${{ env.REPO }}
           token: ${{ secrets.GH_PAT }}
           path: usa
-          fetch-depth: 0
+          fetch-depth: 1
 
       # 🐍 Setup Python
       - name: Setup Python
@@ -54,7 +46,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 🎭 Install Playwright + xvfb
+      # 🎭 Install Playwright
       - name: Install Playwright
         working-directory: usa
         run: |
@@ -62,136 +54,69 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y xvfb
 
-      # 📅 Set target date
-      - name: Set Date
-        shell: bash
+      # 📅 Show Canada dates
+      - name: Show Config
         run: |
-          if [[ "${{ matrix.day }}" == "today" ]]; then
-            DATE=$(TZ=$TZ date +"%Y-%m-%d")
-          else
-            DATE=$(TZ=$TZ date -d "+1 day" +"%Y-%m-%d")
-          fi
-
-          echo "DATE=$DATE" >> $GITHUB_ENV
-
-          echo "================================"
-          echo "📅 DATE=$DATE"
           echo "🎬 FILM_ID=$CINEPLEX_FILM_ID"
-          echo "🧩 SHARD=${{ matrix.shard }}/$TOTAL_SHARDS"
-          echo "================================"
+          echo "🇨🇦 Today: $(TZ=$TZ date +%Y%m%d)"
+          echo "🇨🇦 Tomorrow: $(TZ=$TZ date -d '+1 day' +%Y%m%d)"
 
-      # 🚀 Run scraper with retry
+      # 🚀 Run scraper for Today & Tomorrow (Canada Time)
       - name: Run canada.py
         working-directory: usa
-        shell: bash
-        env:
-          SHARD_INDEX: ${{ matrix.shard }}
         run: |
-          success=0
+          dates=(
+            "$(TZ=$TZ date +%Y%m%d)"
+            "$(TZ=$TZ date -d '+1 day' +%Y%m%d)"
+          )
 
-          for i in {1..10}; do
-            echo "🔁 Scraper Attempt $i"
+          for TARGET_DATE in "${dates[@]}"; do
+            echo ""
+            echo "=================================="
+            echo "📅 Processing $TARGET_DATE"
+            echo "=================================="
 
-            xvfb-run -a python canada.py "$DATE" "$SHARD_INDEX" "$TOTAL_SHARDS"
+            success=0
 
-            EXIT_CODE=$?
+            for i in 1 2 3; do
+              echo "🔁 Attempt $i"
 
-            if [ $EXIT_CODE -eq 0 ]; then
-              success=1
-              echo "✅ Scraper success"
-              break
+              xvfb-run -a python canada.py "$TARGET_DATE" && success=1 && break
+
+              echo "⚠️ Failed attempt $i"
+              sleep 20
+            done
+
+            if [ $success -ne 1 ]; then
+              echo "❌ Scraper failed for $TARGET_DATE"
+              exit 1
             fi
-
-            echo "⚠️ Failed scraper attempt $i"
-            sleep $((i * 20))
           done
-
-          if [ $success -ne 1 ]; then
-            echo "❌ All scraper retries failed"
-            exit 1
-          fi
-
-      # 🔄 Sync latest before commit
-      - name: Rebase Latest
-        working-directory: usa
-        shell: bash
-        run: |
-          for i in {1..10}; do
-            echo "🔄 Rebase Attempt $i"
-
-            git fetch origin main
-
-            if git rebase origin/main; then
-              echo "✅ Rebase successful"
-              exit 0
-            fi
-
-            echo "⚠️ Rebase failed"
-
-            git rebase --abort || true
-
-            sleep $((i * 15))
-          done
-
-          echo "❌ Rebase failed after retries"
-          exit 1
 
       # 📤 Commit & Push
       - name: Commit & Push
         working-directory: usa
-        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add -A
 
-          # ❌ Exclude unwanted USA folder
+          # exclude unwanted folder
           git reset data/244813/ || true
 
           if [[ -n $(git status --porcelain) ]]; then
+            git commit -m "canada update $(TZ=$TZ date +'%Y-%m-%d %H:%M:%S %Z')"
 
-            git commit -m "canada shard-${{ matrix.shard }} update $DATE ($(date -u +'%H:%M:%S UTC'))" || true
+            for i in 1 2 3 4 5; do
+              echo "🚀 Push attempt $i"
 
-            PUSH_SUCCESS=0
+              git pull --rebase origin main && git push && break
 
-            for i in {1..10}; do
-              echo "🚀 Push Attempt $i"
-
-              git fetch origin main
-
-              if ! git rebase origin/main; then
-                echo "⚠️ Rebase conflict detected"
-
-                git rebase --abort || true
-
-                echo "⏳ Waiting before retry..."
-                sleep $((i * 20))
-                continue
-              fi
-
-              if git push origin HEAD:main; then
-                echo "✅ Push successful"
-                PUSH_SUCCESS=1
-                break
-              fi
-
-              echo "⚠️ Push failed"
-
-              git fetch origin main
-
-              git rebase origin/main || {
-                git rebase --abort || true
-              }
-
-              sleep $((i * 20))
+              sleep $((i * 10))
             done
 
-            if [ $PUSH_SUCCESS -ne 1 ]; then
-              echo "❌ Push failed after all retries"
-              exit 1
-            fi
-
+            echo "✅ Changes pushed"
           else
             echo "🟡 No changes detected"
           fi
