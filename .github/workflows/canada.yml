@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: canada-target-${{ github.ref }}
+  group: canada-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
