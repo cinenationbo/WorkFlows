@@ -5,7 +5,7 @@ on:
 
 # 🔥 prevent overlapping runs
 concurrency:
-  group: odd-${{ github.ref }}
+  group: sp-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
 
     env:
       MOVIE_ID: "243819"
-      RELEASE_DATE: "2026-06-29"
+      RELEASE_DATE: "2026-07-29"
       REPO: cinenationbo/usa
 
     steps:
