@@ -68,7 +68,7 @@ jobs:
 
           git add data/
 
-          git commit -m "[skip ci] ${{ matrix.scraper }} update ($(date -u +'%Y-%m-%d %H:%M:%S UTC'))" || echo "No changes"
+          git commit -m "${{ matrix.scraper }} update ($(date -u +'%Y-%m-%d %H:%M:%S UTC'))" || echo "No changes"
 
           sleep $((RANDOM % 10))
 
