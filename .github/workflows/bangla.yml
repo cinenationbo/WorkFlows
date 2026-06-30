@@ -1,8 +1,6 @@
 name: BANGLADESH
 
 on:
-  schedule:
-    - cron: "30 * * * *"
   workflow_dispatch:
 
 # 🔥 prevent overlapping runs
