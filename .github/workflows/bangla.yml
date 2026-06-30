@@ -52,12 +52,12 @@ jobs:
           cd bangladesh
           MODE="${{ matrix.mode }}"
 
-          echo "🎬 Running movieticketsbd.py with mode $MODE"
+          echo "🎬 Running bangladesh.py with mode $MODE"
 
           for i in {1..6}; do
             echo "Attempt $i"
 
-            if python movieticketsbd.py --mode "$MODE"; then
+            if python bangladesh.py --mode "$MODE"; then
               echo "✅ Scraper finished successfully"
               break
             fi
