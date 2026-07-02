@@ -37,7 +37,7 @@ jobs:
         run: |
           cd aus
           python -m pip install --upgrade pip
-          pip install requests cloudscraper playwright
+          pip install requests aiohttp aiohttp_retry tqdm cloudscraper tabulate playwright pytz
 
       # 💾 Cache Playwright browsers
       - name: Cache Playwright Browsers
