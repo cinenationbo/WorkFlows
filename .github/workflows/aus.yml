@@ -45,7 +45,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('aus/australia/requirements.txt') }}
+          key: ${{ runner.os }}-playwright-${{ hashFiles('aus/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-playwright-
 
@@ -61,25 +61,22 @@ jobs:
           MODE="${{ matrix.mode }}"
 
           # Run Australia
-          if [ -d australia ]; then
-            echo "🎬 Running Australia scraper in mode $MODE"
-            cd australia
+          if [ -f austrila.py ]; then
+            echo "🎬 Running Australia scraper (austrila.py) in mode $MODE"
             for i in {1..6}; do
               echo "Australia Attempt $i"
-              if python australia.py --mode "$MODE"; then
+              if python austrila.py --mode "$MODE"; then
                 echo "✅ Australia finished successfully"
                 break
               fi
               echo "❌ Australia failed. Retrying..."
               sleep 10
             done
-            cd ..
           fi
 
           # Run New Zealand
-          if [ -d nz ]; then
-            echo "🎬 Running New Zealand scraper in mode $MODE"
-            cd nz
+          if [ -f nz.py ]; then
+            echo "🎬 Running New Zealand scraper (nz.py) in mode $MODE"
             for i in {1..6}; do
               echo "New Zealand Attempt $i"
               if python nz.py --mode "$MODE"; then
@@ -89,7 +86,6 @@ jobs:
               echo "❌ New Zealand failed. Retrying..."
               sleep 10
             done
-            cd ..
           fi
 
       # 💾 Commit & Push
@@ -99,9 +95,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # Add both data paths
-          git add australia/data/ || true
-          git add nz/data/ || true
+          # Add output data path
+          git add data/ || true
 
           git commit -m "[skip ci] ${{ matrix.mode }} update ($(date -u +'%Y-%m-%d %H:%M:%S UTC'))" || echo "No changes"
 
