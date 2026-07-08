@@ -1,11 +1,11 @@
-name: The Odyssey (2026) USA
+name: Lenin (2026) USA
 
 on:
   workflow_dispatch:
 
 # 🔥 prevent overlapping runs
 concurrency:
-  group: osv-${{ github.ref }}
+  group: len-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -14,11 +14,11 @@ jobs:
 
     strategy:
       matrix:
-        shard: [0]
+        shard: [0,1]
 
     env:
-      MOVIE_ID: "244827"
-      RELEASE_DATE: "2026-06-18"
+      MOVIE_ID: "246389"
+      RELEASE_DATE: "2026-08-10"
       REPO: cinenationbo/usa
 
     steps:
@@ -101,7 +101,7 @@ jobs:
 
     env:
       REPO: cinenationbo/usa
-      MOVIE_ID: "244827"
+      MOVIE_ID: "246389"
     steps:
       # ✅ Setup Python
       - name: Setup Python
