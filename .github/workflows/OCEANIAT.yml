@@ -19,9 +19,7 @@ jobs:
       matrix:
         include:
           - date: "20260724"
-            shard: 1
           - date: "20260725"
-            shard: 2
 
     env:
       REPO: cinenationbo/aus
@@ -66,12 +64,11 @@ jobs:
           cd aus
 
           DATE="${{ matrix.date }}"
-          SHARD="${{ matrix.shard }}"
           MODE="advance"
 
           echo "=================================="
-          echo "DATE  : $DATE"
-          echo "SHARD : $SHARD"
+          echo "DATE : $DATE"
+          echo "MODE : $MODE"
           echo "=================================="
 
           # Australia scraper
@@ -90,8 +87,7 @@ jobs:
             echo "Attempt $i"
             if python "$SCRAPER_SCRIPT" \
               --mode "$MODE" \
-              --date "$DATE" \
-              --shard "$SHARD"; then
+              --date "$DATE"; then
               echo "Australia completed."
               break
             fi
@@ -108,8 +104,7 @@ jobs:
               echo "Attempt $i"
               if python nz.py \
                 --mode "$MODE" \
-                --date "$DATE" \
-                --shard "$SHARD"; then
+                --date "$DATE"; then
                 echo "New Zealand completed."
                 break
               fi
@@ -129,7 +124,7 @@ jobs:
 
           git add data/ || true
 
-          git commit -m "Advance ${{ matrix.date }} shard-${{ matrix.shard }} ($(date -u +'%Y-%m-%d %H:%M:%S UTC'))" || echo "No changes"
+          git commit -m "Advance ${{ matrix.date }} ($(date -u +'%Y-%m-%d %H:%M:%S UTC'))" || echo "No changes"
 
           sleep $((RANDOM % 10))
 
@@ -139,10 +134,10 @@ jobs:
             git pull --rebase origin main || true
 
             if git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git; then
-              echo "Push succeeded"
+              echo "✅ Push succeeded"
               break
             fi
 
-            echo "Push failed. Retrying in 5 seconds..."
+            echo "❌ Push failed. Retrying in 5 seconds..."
             sleep 5
           done
