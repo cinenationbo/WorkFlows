@@ -1,0 +1,133 @@
+name: OCEANIA TARGET DATE
+
+on:
+  schedule:
+    - cron: '0 */4 * * *'   # runs every 4 hours
+  workflow_dispatch:          # also allow manual trigger
+
+# 🔥 prevent overlapping runs
+concurrency:
+  group: oceania-target-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240      # 4-hour job cap
+
+    env:
+      REPO: cinenationbo/aus
+      TARGET_DATE: "20260724"   # ← hardcoded target date (YYYYMMDD)
+
+    steps:
+      # 🔒 Clone PRIVATE repo
+      - name: Clone Private Repo
+        run: |
+          git clone --depth=1 https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+
+      # 🐍 Setup Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 📦 Install dependencies
+      - name: Install dependencies
+        run: |
+          cd aus
+          python -m pip install --upgrade pip
+          pip install requests aiohttp aiohttp_retry tqdm cloudscraper tabulate playwright pytz
+
+      # 💾 Cache Playwright browsers
+      - name: Cache Playwright Browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('aus/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      # 📥 Install Playwright Chromium
+      - name: Install Playwright Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: python -m playwright install chromium
+
+      # 🎬 Run Scrapers
+      - name: Run Scrapers
+        run: |
+          cd aus
+          TARGET_DATE="${{ env.TARGET_DATE }}"
+          MODE="advance"
+
+          # Compute TARGET_DATE + 1
+          TARGET_DATE_PLUS1=$(date -d "$(echo $TARGET_DATE | sed 's/\(....\)\(..\)\(..\)/\1-\2-\3/') + 1 day" +%Y%m%d)
+
+          # Always run both dates in advance mode
+          DATES=("$TARGET_DATE" "$TARGET_DATE_PLUS1")
+          echo "📅 Advance mode — running dates: ${DATES[*]}"
+
+          # Determine correct Australia script filename
+          if [ -f aus.py ]; then
+            SCRAPER_SCRIPT="aus.py"
+          elif [ -f austrila.py ]; then
+            SCRAPER_SCRIPT="austrila.py"
+          else
+            SCRAPER_SCRIPT=""
+          fi
+
+          # Run Australia for each date
+          if [ -n "$SCRAPER_SCRIPT" ]; then
+            for RUN_DATE in "${DATES[@]}"; do
+              echo "🎬 Australia ($SCRAPER_SCRIPT) — mode=$MODE date=$RUN_DATE"
+              for i in {1..6}; do
+                echo "  Attempt $i"
+                if python $SCRAPER_SCRIPT --mode "$MODE" --date "$RUN_DATE"; then
+                  echo "  ✅ Done"
+                  break
+                fi
+                echo "  ❌ Failed. Retrying in 10s..."
+                sleep 10
+              done
+            done
+          fi
+
+          # Run New Zealand for each date
+          if [ -f nz.py ]; then
+            for RUN_DATE in "${DATES[@]}"; do
+              echo "🎬 New Zealand (nz.py) — mode=$MODE date=$RUN_DATE"
+              for i in {1..6}; do
+                echo "  Attempt $i"
+                if python nz.py --mode "$MODE" --date "$RUN_DATE"; then
+                  echo "  ✅ Done"
+                  break
+                fi
+                echo "  ❌ Failed. Retrying in 10s..."
+                sleep 10
+              done
+            done
+          fi
+
+      # 💾 Commit & Push
+      - name: Commit scraper data
+        run: |
+          cd aus
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add data/ || true
+
+          git commit -m "[skip ci] target=${{ env.TARGET_DATE }} advance ($(date -u +'%Y-%m-%d %H:%M:%S UTC'))" || echo "No changes"
+
+          sleep $((RANDOM % 10))
+
+          for i in {1..5}; do
+            echo "Push attempt $i"
+            git pull --rebase origin main || true
+            if git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git; then
+              echo "✅ Push succeeded"
+              break
+            fi
+            echo "❌ Push failed. Retrying in 5s..."
+            sleep 5
+          done
