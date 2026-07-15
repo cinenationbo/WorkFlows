@@ -17,8 +17,8 @@ jobs:
         shard: [0,1]
 
     env:
-      MOVIE_ID: "246389"
-      RELEASE_DATE: "2026-07-09"
+      MOVIE_ID: "243375"
+      RELEASE_DATE: "2026-07-23"
       REPO: cinenationbo/usa
 
     steps:
