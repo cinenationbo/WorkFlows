@@ -1,0 +1,89 @@
+name: MALAYSIA TARGET DATE
+
+on:
+  schedule:
+    - cron: '*/40 * * * *'   # runs every 4 hours
+  workflow_dispatch:          # also allow manual trigger
+
+# 🔥 prevent overlapping runs
+concurrency:
+  group: malaysia-target-${{ github.ref }}-${{ matrix.date }}
+  cancel-in-progress: true
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240      # 4-hour job cap
+
+    strategy:
+      fail-fast: false
+      matrix:
+        date: ["20260723", "20260724", "20260725"]
+
+    env:
+      REPO: cinenationbo/malaysia
+
+    steps:
+      # 🔒 Clone PRIVATE repo
+      - name: Clone Private Repo
+        run: |
+          git clone --depth=1 https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+
+      # 🐍 Setup Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 📦 Install dependencies
+      - name: Install dependencies
+        run: |
+          cd malaysia
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            pip install requests aiohttp beautifulsoup4 tabulate
+          fi
+
+      # 🎬 Run Scrapers
+      - name: Run Scrapers
+        run: |
+          cd malaysia
+          RUN_DATE="${{ matrix.date }}"
+          MODE="advance"
+
+          echo "🎬 Malaysia Scraper — mode=$MODE date=$RUN_DATE"
+          for i in {1..6}; do
+            echo "  Attempt $i"
+            if python malaysia.py --mode "$MODE" --date "$RUN_DATE"; then
+              echo "  ✅ Done"
+              break
+            fi
+            echo "  ❌ Failed. Retrying in 10s..."
+            sleep 10
+          done
+
+      # 💾 Commit & Push
+      - name: Commit scraper data
+        run: |
+          cd malaysia
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add data/ || true
+
+          git commit -m "target=${{ matrix.date }} advance ($(date -u +'%Y-%m-%d %H:%M:%S UTC'))" || echo "No changes"
+
+          sleep $((RANDOM % 10))
+
+          for i in {1..5}; do
+            echo "Push attempt $i"
+            git pull --rebase origin main || true
+            if git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git; then
+              echo "✅ Push succeeded"
+              break
+            fi
+            echo "❌ Push failed. Retrying in 5s..."
+            sleep 5
+          done
