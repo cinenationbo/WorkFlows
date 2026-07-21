@@ -1,4 +1,4 @@
-name: The Odyssey Main  USA
+name: Avengers: Doomsday  USA
 
 on:
   workflow_dispatch:
@@ -17,8 +17,8 @@ jobs:
         shard: [0]
 
     env:
-      MOVIE_ID: "241283"
-      RELEASE_DATE: "2026-07-16"
+      MOVIE_ID: "237176"
+      RELEASE_DATE: "2026-12-17"
       REPO: cinenationbo/usa
 
     steps:
