@@ -58,6 +58,10 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: python -m playwright install chromium
 
+      # 📥 Install Playwright System Dependencies
+      - name: Install Playwright System Dependencies
+        run: python -m playwright install-deps
+
       # 🎬 Run scraper
       - name: Run scraper
         run: |
@@ -87,7 +91,7 @@ jobs:
 
           git add data/
 
-          git commit -m "${{ matrix.mode }} update ($(date -u +'%Y-%m-%d %H:%M:%S UTC'))" || echo "No changes"
+          git commit -m "[skip ci] ${{ matrix.mode }} update ($(date -u +'%Y-%m-%d %H:%M:%S UTC'))" || echo "No changes"
 
           sleep $((RANDOM % 10))
 
