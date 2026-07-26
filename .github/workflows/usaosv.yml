@@ -144,7 +144,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           if [[ -n $(git status --porcelain data/) ]]; then
-            git add data/
+            git add .
             git commit -m "combined $(date -u +'%Y-%m-%d %H:%M:%S')"
 
             # retry loop
