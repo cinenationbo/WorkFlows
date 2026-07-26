@@ -1,11 +1,11 @@
-name: Lenin (2026) USA
+name: JANA usa
 
 on:
   workflow_dispatch:
 
 # 🔥 prevent overlapping runs
 concurrency:
-  group: len-${{ github.ref }}
+  group: sp-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -22,7 +22,7 @@ jobs:
       REPO: cinenationbo/usa
 
     steps:
-      # ✅ Setup Python (no cache yet)
+      # ✅ Setup Python
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -62,7 +62,7 @@ jobs:
           echo "TARGET_DATE=$TARGET_DATE" >> $GITHUB_ENV
           echo "📅 TARGET_DATE=$TARGET_DATE"
 
-      # 🎬 Run scraper
+      # 🎬 Run scraper (usav2.py)
       - name: Run scraper
         run: |
           cd usa
@@ -77,8 +77,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if [[ -n $(git status --porcelain data/) ]]; then
-            git add data/
+          if [[ -n $(git status --porcelain) ]]; then
+            git add -A
             git commit -m "[skip ci] shard ${{ matrix.shard }} $TARGET_DATE ($(date -u +'%H:%M:%S'))"
 
             # retry loop
@@ -102,6 +102,8 @@ jobs:
     env:
       REPO: cinenationbo/usa
       MOVIE_ID: "243375"
+      RELEASE_DATE: "2026-07-22"
+
     steps:
       # ✅ Setup Python
       - name: Setup Python
@@ -127,8 +129,6 @@ jobs:
           cd usa
           pip install -r requirements.txt
 
-      
-
       # 📊 Run combiner
       - name: Run combiner
         run: |
@@ -143,8 +143,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if [[ -n $(git status --porcelain data/) ]]; then
-            git add .
+          if [[ -n $(git status --porcelain) ]]; then
+            git add -A
             git commit -m "combined $(date -u +'%Y-%m-%d %H:%M:%S')"
 
             # retry loop
