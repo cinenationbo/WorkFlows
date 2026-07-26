@@ -3,160 +3,197 @@ name: JANA usa
 on:
   workflow_dispatch:
 
-# 🔥 prevent overlapping runs
 concurrency:
-  group: sp-${{ github.ref }}
+  group: jana-${{ github.ref }}
   cancel-in-progress: true
+
+# 🌍 GLOBAL ENV — available to all jobs
+env:
+  REPO: "cinenationbo/usa"
+  MOVIE_ID: "243375"
+  RELEASE_DATE: "2026-07-22"
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
 
     strategy:
+      fail-fast: false
+      max-parallel: 1
       matrix:
-        shard: [0,1]
-
-    env:
-      MOVIE_ID: "243375"
-      RELEASE_DATE: "2026-07-22"
-      REPO: cinenationbo/usa
+        shard: [0, 1]
 
     steps:
-      # ✅ Setup Python
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      # 🔥 Clone PRIVATE repo
       - name: Clone Private Repo
         run: |
-          git clone --depth=1 https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+          git clone --depth=1 \
+            https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git usa
 
-      # ⚡ Enable pip cache AFTER clone
       - name: Cache pip
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('usa/requirements.txt') }}
+          key: ${{ runner.os }}-python-3.12-pip-${{ hashFiles('usa/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-python-3.12-pip-
 
-      # ⚡ Install dependencies
       - name: Install dependencies
+        working-directory: usa
         run: |
-          cd usa
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 📅 Compute TARGET_DATE
       - name: Compute TARGET_DATE
+        shell: bash
         run: |
           TODAY=$(date -u +"%Y-%m-%d")
 
-          BASE_DATE=$TODAY
+          BASE_DATE="$TODAY"
+
           if [[ "$TODAY" < "$RELEASE_DATE" ]]; then
-            BASE_DATE=$RELEASE_DATE
+            BASE_DATE="$RELEASE_DATE"
           fi
 
-          TARGET_DATE=$(date -u -d "$BASE_DATE +${{ matrix.shard }} day" +"%Y-%m-%d")
+          TARGET_DATE=$(date -u \
+            -d "$BASE_DATE +${{ matrix.shard }} day" \
+            +"%Y-%m-%d")
 
-          echo "TARGET_DATE=$TARGET_DATE" >> $GITHUB_ENV
+          echo "TARGET_DATE=$TARGET_DATE" >> "$GITHUB_ENV"
+
+          echo "🎬 MOVIE_ID=$MOVIE_ID"
+          echo "📅 TODAY=$TODAY"
           echo "📅 TARGET_DATE=$TARGET_DATE"
+          echo "🧩 SHARD=${{ matrix.shard }}"
 
-      # 🎬 Run scraper (usav2.py)
       - name: Run scraper
+        working-directory: usa
         run: |
-          cd usa
           echo "🎬 MOVIE_ID=$MOVIE_ID"
           echo "📅 TARGET_DATE=$TARGET_DATE"
+
           python usa.py
 
-      # 🚀 Commit & Push back to PRIVATE repo
       - name: Commit & Push
+        working-directory: usa
+        shell: bash
         run: |
-          cd usa
+          set -e
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if [[ -n $(git status --porcelain) ]]; then
-            git add -A
-            git commit -m "[skip ci] shard ${{ matrix.shard }} $TARGET_DATE ($(date -u +'%H:%M:%S'))"
-
-            # retry loop
-            for i in {1..5}; do
-              echo "🔁 Push attempt $i..."
-              git pull --rebase origin main && \
-              git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git && break
-              echo "⚠️ Retry in $((i*5))s..."
-              sleep $((i*5))
-            done
-
-            echo "✅ Changes pushed"
-          else
+          if [[ -z "$(git status --porcelain)" ]]; then
             echo "🟡 No changes"
+            exit 0
           fi
+
+          git add -A
+          git commit -m "[skip ci] shard ${{ matrix.shard }} $TARGET_DATE ($(date -u +'%H:%M:%S'))"
+
+          for i in {1..5}; do
+            echo "🔁 Push attempt $i/5..."
+
+            git rebase --abort 2>/dev/null || true
+            git fetch origin main
+
+            if git rebase origin/main; then
+              if git push origin HEAD:main; then
+                echo "✅ Shard ${{ matrix.shard }} pushed"
+                exit 0
+              fi
+            else
+              echo "❌ Rebase conflict"
+              git rebase --abort 2>/dev/null || true
+            fi
+
+            WAIT_TIME=$((i * 5))
+            echo "⚠️ Retry in ${WAIT_TIME}s..."
+            sleep "$WAIT_TIME"
+          done
+
+          echo "❌ Failed after 5 attempts"
+          exit 1
+
 
   combine:
     needs: scrape
     runs-on: ubuntu-latest
 
-    env:
-      REPO: cinenationbo/usa
-      MOVIE_ID: "243375"
-      RELEASE_DATE: "2026-07-22"
-
     steps:
-      # ✅ Setup Python
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      # 🔥 Clone PRIVATE repo again (fresh latest)
-      - name: Clone Private Repo
+      - name: Clone Latest Private Repo
         run: |
-          git clone --depth=1 https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git
+          git clone --depth=1 \
+            https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git usa
 
-      # ⚡ Cache pip
       - name: Cache pip
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('usa/requirements.txt') }}
+          key: ${{ runner.os }}-python-3.12-pip-${{ hashFiles('usa/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-python-3.12-pip-
 
-      # ⚡ Install deps
       - name: Install dependencies
+        working-directory: usa
         run: |
-          cd usa
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 📊 Run combiner
       - name: Run combiner
+        working-directory: usa
         run: |
-          cd usa
           echo "📊 Combining data..."
+          echo "🎬 MOVIE_ID=$MOVIE_ID"
+
           python combiner.py
 
-      # 🚀 Commit combined output
       - name: Commit & Push Combined
+        working-directory: usa
+        shell: bash
         run: |
-          cd usa
+          set -e
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          if [[ -n $(git status --porcelain) ]]; then
-            git add -A
-            git commit -m "combined $(date -u +'%Y-%m-%d %H:%M:%S')"
-
-            # retry loop
-            for i in {1..5}; do
-              echo "🔁 Push attempt $i..."
-              git pull --rebase origin main && \
-              git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git && break
-              echo "⚠️ Retry in $((i*5))s..."
-              sleep $((i*5))
-            done
-
-            echo "✅ Combined pushed"
-          else
-            echo "🟡 No changes"
+          if [[ -z "$(git status --porcelain)" ]]; then
+            echo "🟡 No combined changes"
+            exit 0
           fi
+
+          git add -A
+          git commit -m "[skip ci] combined $(date -u +'%Y-%m-%d %H:%M:%S')"
+
+          for i in {1..5}; do
+            echo "🔁 Combined push attempt $i/5..."
+
+            git rebase --abort 2>/dev/null || true
+            git fetch origin main
+
+            if git rebase origin/main; then
+              if git push origin HEAD:main; then
+                echo "✅ Combined data pushed"
+                exit 0
+              fi
+            else
+              echo "❌ Rebase conflict"
+              git rebase --abort 2>/dev/null || true
+            fi
+
+            WAIT_TIME=$((i * 5))
+            echo "⚠️ Retry in ${WAIT_TIME}s..."
+            sleep "$WAIT_TIME"
+          done
+
+          echo "❌ Failed after 5 attempts"
+          exit 1
