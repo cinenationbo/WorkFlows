@@ -3,7 +3,7 @@ name: MALAYSIA
 on:
   workflow_dispatch:
 
-# 🔥 prevent overlapping runs
+# 🔥 Prevent overlapping workflow runs
 concurrency:
   group: malaysia-${{ github.ref }}
   cancel-in-progress: true
@@ -36,7 +36,9 @@ jobs:
       - name: Install dependencies
         run: |
           cd malaysia
+
           python -m pip install --upgrade pip
+
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           else
@@ -47,6 +49,7 @@ jobs:
       - name: Run scraper
         run: |
           cd malaysia
+
           MODE="${{ matrix.mode }}"
 
           echo "🎬 Running malaysia.py with mode $MODE"
@@ -56,36 +59,45 @@ jobs:
 
             if python malaysia.py --mode "$MODE"; then
               echo "✅ Scraper finished successfully"
-              break
+              exit 0
             fi
 
             echo "❌ Scraper failed. Retrying in 10 seconds..."
             sleep 10
           done
 
+          echo "❌ Scraper failed after 6 attempts"
+          exit 1
+
       # 💾 Commit & Push
       - name: Commit scraper data
         run: |
           cd malaysia
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data/
+          echo "📦 Adding all changed files..."
+          git add .
 
-          git commit -m "${{ matrix.mode }} update ($(date -u +'%Y-%m-%d %H:%M:%S UTC'))" || echo "No changes"
+          git commit -m "${{ matrix.mode }} update ($(date -u +'%Y-%m-%d %H:%M:%S UTC'))" || echo "No changes to commit"
 
+          # Random delay to reduce collision between daily/advance jobs
           sleep $((RANDOM % 10))
 
           for i in {1..5}; do
-            echo "Push attempt $i"
+            echo "🚀 Push attempt $i"
 
-            git pull --rebase origin main || true
+            git pull --rebase --autostash origin main || true
 
             if git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git; then
               echo "✅ Push succeeded"
-              break
+              exit 0
             fi
 
             echo "❌ Push failed. Retrying in 5 seconds..."
             sleep 5
           done
+
+          echo "❌ Push failed after 5 attempts"
+          exit 1
