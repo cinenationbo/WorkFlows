@@ -22,6 +22,7 @@ jobs:
 
     env:
       REPO: cinenationbo/malaysia
+      PYTHONDONTWRITEBYTECODE: "1"
 
     steps:
       # 🔒 Clone PRIVATE repo
@@ -71,6 +72,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+          # Remove __pycache__ folders and untrack them if previously tracked in repo
+          find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          git rm -rf --cached __pycache__ 2>/dev/null || true
+
           git add data/ || true
 
           git commit -m "target=${{ matrix.date }} advance ($(date -u +'%Y-%m-%d %H:%M:%S UTC'))" || echo "No changes"
@@ -79,7 +84,11 @@ jobs:
 
           for i in {1..5}; do
             echo "Push attempt $i"
-            git pull --rebase origin main || true
+            git rebase --abort 2>/dev/null || true
+            git pull --rebase --autostash origin main || true
+            find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+            git rm -rf --cached __pycache__ 2>/dev/null || true
+
             if git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git; then
               echo "✅ Push succeeded"
               break
