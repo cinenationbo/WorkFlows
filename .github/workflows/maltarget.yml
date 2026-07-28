@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        date: ["20260723", "20260724", "20260725"]
+        date: ["20260730", "20260731"]
 
     env:
       REPO: cinenationbo/malaysia
