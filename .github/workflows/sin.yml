@@ -73,7 +73,7 @@ jobs:
           if git diff --staged --quiet; then
             echo "No data changes detected."
           else
-            git commit -m "[skip ci] Singapore ${{ matrix.mode }} update ($(date -u +'%Y-%m-%d %H:%M:%S UTC'))"
+            git commit -m "Singapore ${{ matrix.mode }} update ($(date -u +'%Y-%m-%d %H:%M:%S UTC'))"
             
             for i in {1..5}; do
               echo "Push attempt $i..."
