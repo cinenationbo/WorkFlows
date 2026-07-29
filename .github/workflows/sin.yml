@@ -22,7 +22,7 @@ jobs:
       REPO: cinenationbo/singapore
 
     steps:
-      # 🔒 Clone Private Repository
+      # 🔒 Clone Private Repository into current working directory
       - name: Clone Private Repo
         run: |
           git clone --depth=1 https://x-access-token:${{ secrets.GH_PAT }}@github.com/${{ env.REPO }}.git .
@@ -32,12 +32,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: "pip"
 
       # 📦 Install dependencies
       - name: Install dependencies
         run: |
-          cd singapore
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
@@ -48,7 +46,6 @@ jobs:
       # 🎬 Run Singapore Box Office Tracker
       - name: Run Singapore Scraper
         run: |
-          cd singapore
           MODE="${{ matrix.mode }}"
 
           echo "🎬 Running singapore.py with mode: $MODE"
@@ -68,7 +65,6 @@ jobs:
       # 💾 Commit & Push Data
       - name: Commit and Push Data
         run: |
-          cd singapore
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
