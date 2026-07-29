@@ -1,6 +1,8 @@
 name: SINGAPORE
 
 on:
+  schedule:
+    - cron: "0 */3 * * *"
   workflow_dispatch:
 
 # 🔥 prevent overlapping runs
@@ -40,27 +42,8 @@ jobs:
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           else
-            pip install requests playwright
+            pip install requests beautifulsoup4 urllib3
           fi
-
-      # 💾 Cache Playwright browsers
-      - name: Cache Playwright Browsers
-        id: playwright-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('singapore/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-playwright-
-
-      # 📥 Install Playwright Chromium
-      - name: Install Playwright Chromium
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: python -m playwright install chromium
-
-      # 📥 Install Playwright System Dependencies
-      - name: Install Playwright System Dependencies
-        run: python -m playwright install-deps
 
       # 🎬 Run scraper
       - name: Run scraper
@@ -91,7 +74,7 @@ jobs:
 
           git add data/
 
-          git commit -m " ${{ matrix.mode }} update ($(date -u +'%Y-%m-%d %H:%M:%S UTC'))" || echo "No changes"
+          git commit -m "[skip ci] ${{ matrix.mode }} update ($(date -u +'%Y-%m-%d %H:%M:%S UTC'))" || echo "No changes"
 
           sleep $((RANDOM % 10))
 
