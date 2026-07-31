@@ -30,7 +30,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          if [ -d "gcc/uae" ]; then cd gcc/uae; elif [ -d "uae" ]; then cd uae; fi
+          TARGET_DIR=$(dirname $(find . -name "uae.py" | head -n 1)); cd "$TARGET_DIR"
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
@@ -40,7 +40,7 @@ jobs:
 
       - name: Run UAE Box Office Aggregator
         run: |
-          if [ -d "gcc/uae" ]; then cd gcc/uae; elif [ -d "uae" ]; then cd uae; fi
+          TARGET_DIR=$(dirname $(find . -name "uae.py" | head -n 1)); cd "$TARGET_DIR"
           MODE="${{ matrix.mode }}"
 
           echo "🎬 Running uae.py with mode $MODE"
@@ -57,7 +57,7 @@ jobs:
 
       - name: Commit & Push Scraper Data
         run: |
-          if [ -d "gcc/uae" ]; then cd gcc/uae; elif [ -d "uae" ]; then cd uae; fi
+          TARGET_DIR=$(dirname $(find . -name "uae.py" | head -n 1)); cd "$TARGET_DIR"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
