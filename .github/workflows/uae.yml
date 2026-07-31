@@ -30,7 +30,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          cd gcc/uae
+          cd uae
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
@@ -40,7 +40,7 @@ jobs:
 
       - name: Run UAE Box Office Aggregator
         run: |
-          cd gcc/uae
+          cd uae
           MODE="${{ matrix.mode }}"
 
           echo "🎬 Running uae.py with mode $MODE"
@@ -57,7 +57,7 @@ jobs:
 
       - name: Commit & Push Scraper Data
         run: |
-          cd gcc/uae
+          cd uae
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
@@ -66,5 +66,5 @@ jobs:
 
           git add data/
 
-          git commit -m "AE ${{ matrix.mode }} update ($(date -u +'%Y-%m-%d %H:%M:%S UTC'))" || echo "No changes to commit"
+          git commit -m "UAE ${{ matrix.mode }} update ($(date -u +'%Y-%m-%d %H:%M:%S UTC'))" || echo "No changes to commit"
           git push
