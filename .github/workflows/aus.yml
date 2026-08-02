@@ -2,6 +2,11 @@ name: OCEANIA
 
 on:
   workflow_dispatch:
+    inputs:
+      target_date:
+        description: 'Target Date override (optional, YYYY-MM-DD or YYYYMMDD)'
+        required: false
+        default: ''
 
 # 🔥 prevent overlapping runs
 concurrency:
@@ -49,10 +54,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-playwright-
 
-      # 📥 Install Playwright Chromium
-      - name: Install Playwright Chromium
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: python -m playwright install chromium
+      # 📥 Install Playwright Browsers with dependencies
+      - name: Install Playwright Browsers
+        run: python -m playwright install chromium firefox --with-deps
 
       # 🎬 Run Scrapers
       - name: Run Scrapers
@@ -60,14 +64,30 @@ jobs:
           cd aus
           MODE="${{ matrix.mode }}"
 
+          # Determine correct Australia script filename
+          if [ -f aus.py ]; then
+            SCRAPER_SCRIPT="aus.py"
+          elif [ -f austrila.py ]; then
+            SCRAPER_SCRIPT="austrila.py"
+          else
+            SCRAPER_SCRIPT=""
+          fi
+
           # Run Australia
-          if [ -f austrila.py ]; then
-            echo "🎬 Running Australia scraper (austrila.py) in mode $MODE"
+          if [ -n "$SCRAPER_SCRIPT" ]; then
+            echo "🎬 Running Australia scraper ($SCRAPER_SCRIPT) in mode $MODE"
             for i in {1..6}; do
               echo "Australia Attempt $i"
-              if python austrila.py --mode "$MODE"; then
-                echo "✅ Australia finished successfully"
-                break
+              if [ -n "${{ github.event.inputs.target_date }}" ]; then
+                if python $SCRAPER_SCRIPT --mode "$MODE" --date "${{ github.event.inputs.target_date }}"; then
+                  echo "✅ Australia finished successfully"
+                  break
+                fi
+              else
+                if python $SCRAPER_SCRIPT --mode "$MODE"; then
+                  echo "✅ Australia finished successfully"
+                  break
+                fi
               fi
               echo "❌ Australia failed. Retrying..."
               sleep 10
@@ -79,9 +99,16 @@ jobs:
             echo "🎬 Running New Zealand scraper (nz.py) in mode $MODE"
             for i in {1..6}; do
               echo "New Zealand Attempt $i"
-              if python nz.py --mode "$MODE"; then
-                echo "✅ New Zealand finished successfully"
-                break
+              if [ -n "${{ github.event.inputs.target_date }}" ]; then
+                if python nz.py --mode "$MODE" --date "${{ github.event.inputs.target_date }}"; then
+                  echo "✅ New Zealand finished successfully"
+                  break
+                fi
+              else
+                if python nz.py --mode "$MODE"; then
+                  echo "✅ New Zealand finished successfully"
+                  break
+                fi
               fi
               echo "❌ New Zealand failed. Retrying..."
               sleep 10
@@ -98,7 +125,7 @@ jobs:
           # Add output data path
           git add data/ || true
 
-          git commit -m "${{ matrix.mode }} update ($(date -u +'%Y-%m-%d %H:%M:%S UTC'))" || echo "No changes"
+          git commit -m "[skip ci] ${{ matrix.mode }} update ($(date -u +'%Y-%m-%d %H:%M:%S UTC'))" || echo "No changes"
 
           sleep $((RANDOM % 10))
 
