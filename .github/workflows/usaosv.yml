@@ -1,4 +1,4 @@
-name: JANA usa
+name: korean  usa
 
 on:
   workflow_dispatch:
@@ -10,8 +10,8 @@ concurrency:
 # 🌍 GLOBAL ENV — available to all jobs
 env:
   REPO: "cinenationbo/usa"
-  MOVIE_ID: "243375"
-  RELEASE_DATE: "2026-07-22"
+  MOVIE_ID: "246701"
+  RELEASE_DATE: "2026-08-06"
 
 jobs:
   scrape:
