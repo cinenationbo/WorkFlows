@@ -55,7 +55,7 @@ jobs:
 
           if [[ -n $(git status --porcelain) ]]; then
             git add advance/
-            git commit -m "[skip ci] update advance csv data ($(date -u +'%Y-%m-%d %H:%M:%S UTC'))"
+            git commit -m "update advance  data ($(date -u +'%Y-%m-%d %H:%M:%S UTC'))"
 
             for i in {1..5}; do
               echo "🔁 Push attempt $i..."
